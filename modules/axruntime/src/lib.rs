@@ -32,6 +32,8 @@ mod mp;
 #[cfg(feature = "smp")]
 pub use self::mp::rust_main_secondary;
 
+use alloc::vec::Vec;
+
 const LOGO: &str = r#"
        d8888                            .d88888b.   .d8888b.
       d88888                           d88P" "Y88b d88P  Y88b
@@ -140,6 +142,20 @@ pub extern "C" fn rust_main(cpu_id: usize, dtb: usize) -> ! {
     #[cfg(feature = "alloc")]
     init_allocator();
 
+    // Parse fdt for early memory info
+    let dtb_info = match parse_dtb(dtb.into()) {
+        Ok(info) => info,
+        Err(err) => panic!("Bad dtb {:?}", err),
+    };
+
+    info!("DTB info: ==================================");
+    info!("Memory: {:#x}, size: {:#x}", dtb_info.memory_addr, dtb_info.memory_size);
+    info!("Virtio_mmio[{}]:", dtb_info.mmio_regions.len());
+    for r in dtb_info.mmio_regions {
+        info!("\t{:#x}, size: {:#x}", r.0, r.1);
+    }
+    info!("============================================");
+
     #[cfg(feature = "paging")]
     {
         info!("Initialize kernel page table...");
@@ -189,6 +205,7 @@ pub extern "C" fn rust_main(cpu_id: usize, dtb: usize) -> ! {
         core::hint::spin_loop();
     }
 
+    #[cfg(feature = "alloc")]
     {
         let ga = axalloc::global_allocator();
         info!("Used pages {} / Used bytes {}", ga.used_pages(), ga.used_bytes());
@@ -203,6 +220,18 @@ pub extern "C" fn rust_main(cpu_id: usize, dtb: usize) -> ! {
         debug!("main task exited: exit_code={}", 0);
         axhal::misc::terminate();
     }
+}
+
+// 参考类型定义
+struct DtbInfo {
+    memory_addr: usize,
+    memory_size: usize,
+    mmio_regions: Vec<(usize, usize)>,
+}
+// 参考函数原型
+fn parse_dtb(dtb_pa: usize) -> Result<DtbInfo> {
+// 这里就是对axdtb组件的调用，传入dtb指针，解析后输出结果。这个函数和axdtb留给大家实现
+    let dtb = unsafe {dtb_pa as *DtbInfo}
 }
 
 #[cfg(feature = "alloc")]
