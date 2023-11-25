@@ -32,7 +32,15 @@ mod mp;
 #[cfg(feature = "smp")]
 pub use self::mp::rust_main_secondary;
 
+extern crate alloc;
+
+use core::str;
+use alloc::string::String;
 use alloc::vec::Vec;
+use core::num::ParseIntError;
+
+extern crate axdtb;
+use axdtb::{DtbInfo, FdtError};
 
 const LOGO: &str = r#"
        d8888                            .d88888b.   .d8888b.
@@ -222,16 +230,13 @@ pub extern "C" fn rust_main(cpu_id: usize, dtb: usize) -> ! {
     }
 }
 
-// 参考类型定义
-struct DtbInfo {
-    memory_addr: usize,
-    memory_size: usize,
-    mmio_regions: Vec<(usize, usize)>,
-}
+
 // 参考函数原型
-fn parse_dtb(dtb_pa: usize) -> Result<DtbInfo> {
+fn parse_dtb(dtb_pa: usize) -> Result<DtbInfo, FdtError> {
+
 // 这里就是对axdtb组件的调用，传入dtb指针，解析后输出结果。这个函数和axdtb留给大家实现
-    let dtb = unsafe {dtb_pa as *DtbInfo}
+    axdtb::parse_dt(dtb_pa)
+
 }
 
 #[cfg(feature = "alloc")]
