@@ -30,7 +30,7 @@ paging = ["alloc", "axhal/paging", "axruntime/paging"]
 tls = ["alloc", "axhal/tls", "axruntime/tls", "axtask?/tls"]
 
 # Multi-threading and scheduler
-multitask = ["alloc", "axtask/multitask", "axsync/multitask", "axruntime/multitask"]
+multitask = ["alloc", "axtask/multitask", "axtask/preempt", "axsync/multitask", "axruntime/multitask"]
 sched_fifo = ["axtask/sched_fifo"]
 sched_rr = ["axtask/sched_rr", "irq"]
 sched_cfs = ["axtask/sched_cfs", "irq"]

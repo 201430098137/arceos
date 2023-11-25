@@ -32,14 +32,9 @@ mod mp;
 #[cfg(feature = "smp")]
 pub use self::mp::rust_main_secondary;
 
-extern crate alloc;
-
-use core::str;
-use alloc::string::String;
-use alloc::vec::Vec;
-use core::num::ParseIntError;
-
+#[cfg(feature = "alloc")]
 extern crate axdtb;
+#[cfg(feature = "alloc")]
 use axdtb::{DtbInfo, FdtError};
 
 const LOGO: &str = r#"
@@ -151,18 +146,21 @@ pub extern "C" fn rust_main(cpu_id: usize, dtb: usize) -> ! {
     init_allocator();
 
     // Parse fdt for early memory info
-    let dtb_info = match parse_dtb(dtb.into()) {
-        Ok(info) => info,
-        Err(err) => panic!("Bad dtb {:?}", err),
-    };
+    #[cfg(feature = "alloc")]
+    {
+        let dtb_info = match parse_dtb(dtb.into()) {
+            Ok(info) => info,
+            Err(err) => panic!("Bad dtb {:?}", err),
+        };
 
-    info!("DTB info: ==================================");
-    info!("Memory: {:#x}, size: {:#x}", dtb_info.memory_addr, dtb_info.memory_size);
-    info!("Virtio_mmio[{}]:", dtb_info.mmio_regions.len());
-    for r in dtb_info.mmio_regions {
-        info!("\t{:#x}, size: {:#x}", r.0, r.1);
+        info!("DTB info: ==================================");
+        info!("Memory: {:#x}, size: {:#x}", dtb_info.memory_addr, dtb_info.memory_size);
+        info!("Virtio_mmio[{}]:", dtb_info.mmio_regions.len());
+        for r in dtb_info.mmio_regions {
+            info!("\t{:#x}, size: {:#x}", r.0, r.1);
+        }
+        info!("============================================");
     }
-    info!("============================================");
 
     #[cfg(feature = "paging")]
     {
@@ -232,6 +230,7 @@ pub extern "C" fn rust_main(cpu_id: usize, dtb: usize) -> ! {
 
 
 // 参考函数原型
+#[cfg(feature = "alloc")]
 fn parse_dtb(dtb_pa: usize) -> Result<DtbInfo, FdtError> {
 
 // 这里就是对axdtb组件的调用，传入dtb指针，解析后输出结果。这个函数和axdtb留给大家实现
