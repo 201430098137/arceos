@@ -1,5 +1,6 @@
 #![cfg_attr(feature = "axstd", no_std)]
 #![cfg_attr(feature = "axstd", no_main)]
+#![feature(asm_const)]
 
 #[macro_use]
 #[cfg(feature = "axstd")]
@@ -21,20 +22,43 @@ fn main() {
 
     println!("Load payload ...");
 
+
     let head = read_head(PLASH_START);
     let app_num = head.app_num;
     println!("app num: {}", app_num);
 
     let mut app_start = head.start;
 
+    const RUN_START: usize = 0xffff_ffc0_8010_0000;
     for i in 0..app_num {
         let app_size =  head.apps_size.get(i).unwrap().clone();
         println!("app data size: {}", app_size);
-        let code = unsafe { core::slice::from_raw_parts(app_start as *const u8, app_size) };
-        println!("content: {:?}", &code[..app_size]);
+
+        let run_code = unsafe {
+            core::slice::from_raw_parts_mut(RUN_START as *mut u8, app_size)
+        };
+
+        let load_code = unsafe { core::slice::from_raw_parts(app_start as *const u8, app_size) };
+
+        run_code.copy_from_slice(load_code );
+        println!("run code {:?}; address [{:?}]", run_code, run_code.as_ptr());
+        // let code = unsafe { core::slice::from_raw_parts(app_start as *const u8, app_size) };
+        // println!("content: {:?}", &code[..app_size]);
+
+        println!("Execute app ...");
+
+        // execute app
+        unsafe { core::arch::asm!("
+        li      t2, {run_start}
+        jalr    t2",
+        run_start = const RUN_START,
+        )}
+
+
         app_start += app_size;
     }
     println!("Load payload ok!");
+
 }
 
 #[inline]
