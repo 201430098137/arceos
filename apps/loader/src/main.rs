@@ -6,6 +6,7 @@
 extern crate axstd as std;
 
 use std::cmp::{max, min};
+use std::ops::Index;
 #[cfg(feature = "axstd")]
 use axstd::println;
 
@@ -21,14 +22,18 @@ fn main() {
     println!("Load payload ...");
 
     let head = read_head(PLASH_START);
-    let app_size:usize =  head.app_size;
-    let app_start = head.start as *const u8;
+    let app_num = head.app_num;
+    println!("app num: {}", app_num);
 
-    //println!("app start: {}", head.start);
-    println!("app data size: {}", app_size);
-    let code = unsafe { core::slice::from_raw_parts(app_start, max(app_size, 8)) };
-    println!("content: {:#x}", bytes_to_usize(&code[..8]));
+    let mut app_start = head.start;
 
+    for i in 0..app_num {
+        let app_size =  head.apps_size.get(i).unwrap().clone();
+        println!("app data size: {}", app_size);
+        let code = unsafe { core::slice::from_raw_parts(app_start as *const u8, app_size) };
+        println!("content: {:?}", &code[..app_size]);
+        app_start += app_size;
+    }
     println!("Load payload ok!");
 }
 
@@ -40,7 +45,8 @@ fn bytes_to_usize(bytes: &[u8]) -> usize {
 const  read_size:usize = 4;
 
 struct head {
-    app_size: usize,
+    app_num: usize,
+    apps_size: Vec<usize>,
     start: usize,
 }
 
@@ -52,9 +58,16 @@ fn read_head(start: usize) -> head {
         let data = unsafe { core::slice::from_raw_parts(pos as *const u8, read_size) };
         for &c in data {
             if c == b'\0' {
-                let app_size:usize =  core::str::from_utf8(new_data.as_slice()).unwrap().parse().unwrap();
+                let head_str =  core::str::from_utf8(new_data.as_slice()).unwrap();
+                let heads:Vec<&str> = head_str.split('|').collect();
+                let app_num:usize = heads[0].parse().unwrap();
+                let mut apps_size:Vec<usize> = Vec::new();
+                for i in 0..app_num {
+                    apps_size.push(heads[i+1].parse().unwrap());
+                }
                 return head{
-                    app_size:app_size,
+                    app_num:app_num,
+                    apps_size:apps_size,
                     start: pos+1,
                 };
             }
