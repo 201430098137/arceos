@@ -20,8 +20,9 @@ const PLASH_START: usize = 0x22000000;
 #[cfg_attr(feature = "axstd", no_mangle)]
 #[inline]
 fn main() {
-    let apps_start = PLASH_START as *const u8;
+    //let apps_start = PLASH_START as *const u8;
     //let apps_size = 32; // Dangerous!!! We need to get accurate size of apps.
+    let app_space_size:usize = 2 * 1024 *1024;
 
     println!("Load payload ...");
 
@@ -37,14 +38,17 @@ fn main() {
 
     let mut app_start = head.start;
 
-    const RUN_START: usize = 0xffff_ffc0_8010_0000;
+    unsafe { init_app_page_table(); }
+    unsafe { switch_app_aspace(); }
+
+    const RUN_START: usize = 0x4010_0000;
     println!("abi_table: {:X}", unsafe {ABI_TABLE.as_ptr() as usize});
     for i in 0..app_num {
         let app_size =  head.apps_size.get(i).unwrap().clone();
         println!("app data size: {}", app_size);
 
         let run_code = unsafe {
-            core::slice::from_raw_parts_mut(RUN_START as *mut u8, app_size)
+            core::slice::from_raw_parts_mut((RUN_START + i*app_space_size) as *mut u8, app_size)
         };
 
         let load_code = unsafe { core::slice::from_raw_parts(app_start as *const u8, app_size) };
@@ -54,21 +58,26 @@ fn main() {
         // let code = unsafe { core::slice::from_raw_parts(app_start as *const u8, app_size) };
         // println!("content: {:?}", &code[..app_size]);
 
-        println!("Execute app ...");
-
-        // execute app
-        unsafe { core::arch::asm!("
-        la      a7, {abi_table}
-        li      t2, {run_start}
-        jalr    t2",
-        run_start = const RUN_START,
-        abi_table = sym ABI_TABLE,
-        )}
-
 
         app_start += app_size;
     }
     println!("Load payload ok!");
+
+    println!("Execute app ...");
+
+    for i in 0..app_num {
+        println!("app:{}", i);
+        // execute app
+        unsafe {
+            core::arch::asm!("
+        la      a7, {abi_table}
+        mv      t2, t3
+        jalr    t2",
+        in("t3") (RUN_START + i*app_space_size),
+        abi_table = sym ABI_TABLE,
+            )
+        }
+    }
 
 }
 
@@ -139,4 +148,29 @@ fn abi_putchar(c: char) {
 fn abi_terminate() -> ! {
     println!("terminate");
     arceos_api::sys::ax_terminate();
+}
+
+
+#[link_section = ".data.app_page_table"]
+static mut APP_PT_SV39: [u64; 512] = [0; 512];
+
+unsafe fn init_app_page_table() {
+    // 0x8000_0000..0xc000_0000, VRWX_GAD, 1G block
+    APP_PT_SV39[2] = (0x80000 << 10) | 0xef;
+    // 0xffff_ffc0_8000_0000..0xffff_ffc0_c000_0000, VRWX_GAD, 1G block
+    APP_PT_SV39[0x102] = (0x80000 << 10) | 0xef;
+
+    // 0x0000_0000..0x4000_0000, VRWX_GAD, 1G block
+    APP_PT_SV39[0] = (0x00000 << 10) | 0xef;
+
+    // For App aspace!
+    // 0x4000_0000..0x8000_0000, VRWX_GAD, 1G block
+    APP_PT_SV39[1] = (0x80000 << 10) | 0xef;
+}
+
+unsafe fn switch_app_aspace() {
+    use riscv::register::satp;
+    let page_table_root = APP_PT_SV39.as_ptr() as usize - axconfig::PHYS_VIRT_OFFSET;
+    satp::set(satp::Mode::Sv39, 0, page_table_root >> 12);
+    riscv::asm::sfence_vma_all();
 }
