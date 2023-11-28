@@ -18,6 +18,7 @@ extern crate arceos_api;
 const PLASH_START: usize = 0x22000000;
 
 #[cfg_attr(feature = "axstd", no_mangle)]
+#[inline]
 fn main() {
     let apps_start = PLASH_START as *const u8;
     //let apps_size = 32; // Dangerous!!! We need to get accurate size of apps.
@@ -29,6 +30,7 @@ fn main() {
     let app_num = head.app_num;
     println!("app num: {}", app_num);
 
+
     register_abi(SYS_HELLO, abi_hello as usize);
     register_abi(SYS_PUTCHAR, abi_putchar as usize);
     register_abi(SYS_TERMINATE, abi_terminate as usize);
@@ -36,6 +38,7 @@ fn main() {
     let mut app_start = head.start;
 
     const RUN_START: usize = 0xffff_ffc0_8010_0000;
+    println!("abi_table: {:X}", unsafe {ABI_TABLE.as_ptr() as usize});
     for i in 0..app_num {
         let app_size =  head.apps_size.get(i).unwrap().clone();
         println!("app data size: {}", app_size);
@@ -47,29 +50,19 @@ fn main() {
         let load_code = unsafe { core::slice::from_raw_parts(app_start as *const u8, app_size) };
 
         run_code.copy_from_slice(load_code );
-        println!("run code {:?}; address [{:?}]", run_code, run_code.as_ptr());
+        println!("run code {:?}; len:{} address [{:?}]", run_code, run_code.len(), run_code.as_ptr());
         // let code = unsafe { core::slice::from_raw_parts(app_start as *const u8, app_size) };
         // println!("content: {:?}", &code[..app_size]);
 
         println!("Execute app ...");
-        let arg0: u8 = b'A';
 
         // execute app
         unsafe { core::arch::asm!("
-        li      t0, {abi_num}
-        slli    t0, t0, 3
-        la      t1, {abi_table}
-        add     t1, t1, t0
-        ld      t1, (t1)
-        jalr    t1
+        la      a7, {abi_table}
         li      t2, {run_start}
-        jalr    t2
-        j       .",
+        jalr    t2",
         run_start = const RUN_START,
         abi_table = sym ABI_TABLE,
-        //abi_num = const SYS_HELLO,
-        abi_num = const SYS_TERMINATE,
-        in("a0") arg0,
         )}
 
 
@@ -130,15 +123,20 @@ fn register_abi(num: usize, handle: usize) {
     unsafe { ABI_TABLE[num] = handle; }
 }
 
+#[inline(never)]
 fn abi_hello() {
+    //info!("hello");
     println!("[ABI:Hello] Hello, Apps!");
+    // return
 }
 
+#[inline(never)]
 fn abi_putchar(c: char) {
-    println!("[ABI:Print] {c}");
+    print!("{c}");
 }
 
-fn abi_terminate(c: char) {
+#[inline(never)]
+fn abi_terminate() -> ! {
     println!("terminate");
     arceos_api::sys::ax_terminate();
 }
